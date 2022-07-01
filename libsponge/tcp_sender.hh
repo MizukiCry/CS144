@@ -6,7 +6,6 @@
 #include "tcp_segment.hh"
 #include "wrapping_integers.hh"
 
-#include <functional>
 #include <queue>
 
 //! \brief The "sender" part of a TCP implementation.
@@ -21,16 +20,17 @@ class TCPSender {
     WrappingInt32 _isn;
 
     //! outbound queue of segments that the TCPSender wants sent
-    std::queue<TCPSegment> _segments_out{};
-
-    //! retransmission timer for the connection
-    unsigned int _initial_retransmission_timeout;
+    std::queue<TCPSegment> _segments_out{}, _segments_outstanding{};
 
     //! outgoing stream of bytes that have not yet been sent
     ByteStream _stream;
 
     //! the (absolute) sequence number for the next byte to be sent
-    uint64_t _next_seqno{0};
+    uint64_t _next_seqno = 0;
+
+    uint64_t FlightBytes = 0, WSize = 0, Space = 0, RetryTime = 0;
+    uint32_t InitialRTO, RTO, CTime = 0;
+    bool Timer = false, SYN = false, FIN = false;
 
   public:
     //! Initialize a TCPSender
@@ -38,17 +38,13 @@ class TCPSender {
               const uint16_t retx_timeout = TCPConfig::TIMEOUT_DFLT,
               const std::optional<WrappingInt32> fixed_isn = {});
 
-    //! \name "Input" interface for the writer
-    //!@{
     ByteStream &stream_in() { return _stream; }
     const ByteStream &stream_in() const { return _stream; }
-    //!@}
-
-    //! \name Methods that can cause the TCPSender to send a segment
-    //!@{
 
     //! \brief A new acknowledgment was received
     void ack_received(const WrappingInt32 ackno, const uint16_t window_size);
+
+    void send_segment(TCPSegment &seg);
 
     //! \brief Generate an empty-payload segment (useful for creating empty ACK segments)
     void send_empty_segment();
